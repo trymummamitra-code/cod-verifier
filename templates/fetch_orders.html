@@ -31,10 +31,10 @@
         <div id="shopifyResult" class="mt-4 hidden"></div>
     </div>
     
-    <!-- Shopify Abandoned Carts -->
+    <!-- Shiprocket Abandoned Carts -->
     <div class="bg-white rounded-lg shadow p-6">
-        <h2 class="text-2xl font-bold mb-4">Abandoned Carts (Shopify)</h2>
-        <p class="text-gray-600 mb-4">Fetch abandoned cart checkouts from all 3 stores</p>
+        <h2 class="text-2xl font-bold mb-4">Abandoned Carts (Shiprocket)</h2>
+        <p class="text-gray-600 mb-4">Fetch abandoned checkout calls from Shiprocket</p>
         
         <div class="mb-4">
             <label class="block text-sm font-medium mb-2">Days to fetch</label>
@@ -93,33 +93,13 @@ async function fetchShopify() {
 async function fetchShiprocket() {
     const resultDiv = document.getElementById('shiprocketResult');
     
-    resultDiv.innerHTML = '<p class="text-purple-600">⏳ Fetching abandoned carts...</p>';
+    resultDiv.innerHTML = `
+        <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+            ⚠️ Coming Soon!<br>
+            <small>Shiprocket abandoned cart checkout integration will be added once we have API credentials and checkout endpoint details.</small>
+        </div>
+    `;
     resultDiv.classList.remove('hidden');
-    
-    const response = await fetch('/fetch-orders', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({source: 'abandoned_cart', days: 7})
-    });
-    
-    const data = await response.json();
-    
-    if (response.ok) {
-        resultDiv.innerHTML = `
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-                ✅ Success!<br>
-                Total fetched: ${data.total_fetched}<br>
-                New carts: ${data.new_orders}<br>
-                Carts distributed to callers
-            </div>
-        `;
-    } else {
-        resultDiv.innerHTML = `
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                ❌ Error: ${data.error || 'Failed to fetch abandoned carts'}
-            </div>
-        `;
-    }
 }
 
 // Set default dates

@@ -312,48 +312,12 @@ def fetch_orders():
             })
         
         elif source == 'abandoned_cart':
-            # Fetch abandoned checkouts from Shopify
-            exclude_ids = db.get_confirmed_cancelled_ids()
-            
-            all_carts = shopify_manager.fetch_abandoned_carts_all_stores(days, exclude_ids)
-            
-            # Save to database
-            total_new = 0
-            for store_name, carts in all_carts.items():
-                stores = db.get_all_stores()
-                store = next((s for s in stores if s['name'] == store_name), None)
-                
-                if not store:
-                    continue
-                
-                for cart in carts:
-                    try:
-                        db.create_order(
-                            cart['order_id'],
-                            store['id'],
-                            'abandoned_cart',  # order_type
-                            cart['customer_name'],
-                            cart['phone'],
-                            cart['address'],
-                            cart['pincode'],
-                            cart['product_name'],
-                            cart['price'],
-                            cart['qty'],
-                            cart['order_date']
-                        )
-                        total_new += 1
-                    except Exception as e:
-                        # Skip duplicates
-                        continue
-            
-            # Auto-distribute to callers
-            distribute_orders()
-            
+            # TODO: Fetch abandoned checkouts from Shiprocket
+            # Will need Shiprocket API credentials and checkout endpoint
             return jsonify({
-                'success': True,
-                'total_fetched': sum(len(carts) for carts in all_carts.values()),
-                'new_orders': total_new
-            })
+                'success': False,
+                'error': 'Shiprocket abandoned cart integration coming soon. Need API credentials.'
+            }), 501
     
     return render_template('fetch_orders.html')
 
