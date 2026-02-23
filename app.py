@@ -43,6 +43,46 @@ shopify_stores = [
 
 shopify_manager = MultiStoreManager(shopify_stores)
 
+# ============= INITIALIZATION =============
+
+def init_default_data():
+    """Initialize default stores and users"""
+    # Add Shopify stores if not exist
+    stores = db.get_all_stores()
+    if not stores:
+        db.add_store('Indian Goods Hub', 'ec0171-b0.myshopify.com', 
+                    os.getenv('SHOPIFY_STORE_1_TOKEN'))
+        db.add_store('Mummamitra', '3ac858.myshopify.com',
+                    os.getenv('SHOPIFY_STORE_2_TOKEN'))
+        db.add_store('Paaltubazaar', '12ufpn-k8.myshopify.com',
+                    os.getenv('SHOPIFY_STORE_3_TOKEN'))
+        print("✅ Shopify stores initialized")
+    
+    # Create default admin user if not exist
+    admin = db.get_user_by_email('admin@codverifier.com')
+    if not admin:
+        db.create_user(
+            'Admin',
+            'admin',
+            email='admin@codverifier.com',
+            password_hash=generate_password_hash('admin123')
+        )
+        print("✅ Default admin created (email: admin@codverifier.com, password: admin123)")
+    
+    # Create 5 default callers if not exist
+    callers = db.get_all_callers()
+    if not callers:
+        for i in range(1, 6):
+            db.create_user(
+                f'Caller {i}',
+                'caller',
+                pin=f'{i}111'  # 1111, 2111, 3111, 4111, 5111
+            )
+        print("✅ 5 default callers created (PINs: 1111, 2111, 3111, 4111, 5111)")
+
+# Initialize default data when module loads
+init_default_data()
+
 # ============= AUTHENTICATION =============
 
 def login_required(f):
@@ -450,46 +490,8 @@ def api_login():
         }
     })
 
-# ============= INITIALIZATION =============
-
-def init_default_data():
-    """Initialize default stores and users"""
-    # Add Shopify stores if not exist
-    stores = db.get_all_stores()
-    if not stores:
-        db.add_store('Indian Goods Hub', 'ec0171-b0.myshopify.com', 
-                    os.getenv('SHOPIFY_STORE_1_TOKEN'))
-        db.add_store('Mummamitra', '3ac858.myshopify.com',
-                    os.getenv('SHOPIFY_STORE_2_TOKEN'))
-        db.add_store('Paaltubazaar', '12ufpn-k8.myshopify.com',
-                    os.getenv('SHOPIFY_STORE_3_TOKEN'))
-        print("✅ Shopify stores initialized")
-    
-    # Create default admin user if not exist
-    admin = db.get_user_by_email('admin@codverifier.com')
-    if not admin:
-        db.create_user(
-            'Admin',
-            'admin',
-            email='admin@codverifier.com',
-            password_hash=generate_password_hash('admin123')
-        )
-        print("✅ Default admin created (email: admin@codverifier.com, password: admin123)")
-    
-    # Create 5 default callers if not exist
-    callers = db.get_all_callers()
-    if not callers:
-        for i in range(1, 6):
-            db.create_user(
-                f'Caller {i}',
-                'caller',
-                pin=f'{i}111'  # 1111, 2111, 3111, 4111, 5111
-            )
-        print("✅ 5 default callers created (PINs: 1111, 2111, 3111, 4111, 5111)")
-
 # ============= RUN =============
 
 if __name__ == '__main__':
-    init_default_data()
     port = int(os.getenv('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=True)
