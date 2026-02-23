@@ -113,6 +113,82 @@ class ShopifyAPI:
         
         return False
     
+    def fetch_abandoned_checkouts(self, days=7) -> List[Dict]:
+        """
+        Fetch abandoned checkouts from the last N days
+        Returns list of checkout dictionaries
+        """
+        start_date = (datetime.now() - timedelta(days=days)).isoformat()
+        
+        params = {
+            'status': 'any',
+            'created_at_min': start_date,
+            'limit': 250
+        }
+        
+        all_checkouts = []
+        
+        print(f"📥 Fetching abandoned checkouts from {self.shop_name} (last {days} days)...")
+        
+        result = self._make_request('/checkouts.json', params=params)
+        
+        if result and 'checkouts' in result:
+            checkouts = result['checkouts']
+            # Filter for abandoned (not completed)
+            abandoned = [c for c in checkouts if not c.get('completed_at')]
+            all_checkouts.extend(abandoned)
+        
+        print(f"✅ Found {len(all_checkouts)} abandoned checkouts from {self.shop_name}")
+        return all_checkouts
+    
+    def parse_checkout(self, checkout) -> Dict:
+        """Parse abandoned checkout into our format"""
+        customer = checkout.get('customer') or {}
+        shipping = checkout.get('shipping_address') or {}
+        billing = checkout.get('billing_address') or {}
+        line_items = checkout.get('line_items', [])
+        
+        # Get first line item details
+        first_item = line_items[0] if line_items else {}
+        total_qty = sum(item.get('quantity', 0) for item in line_items)
+        
+        # Use billing if no shipping address
+        address_source = shipping if shipping.get('address1') else billing
+        
+        # Format address
+        address_parts = [
+            address_source.get('address1', ''),
+            address_source.get('address2', ''),
+            address_source.get('city', ''),
+            address_source.get('province', '')
+        ]
+        address = ', '.join([p for p in address_parts if p]) or 'No address provided'
+        
+        # Get phone
+        phone = (
+            address_source.get('phone') or 
+            customer.get('phone') or 
+            checkout.get('phone') or 
+            ''
+        )
+        
+        # Get customer name
+        customer_name = f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip()
+        if not customer_name:
+            customer_name = f"{address_source.get('first_name', '')} {address_source.get('last_name', '')}".strip() or 'Unknown Customer'
+        
+        return {
+            'order_id': f"CART-{checkout.get('token', checkout.get('id'))}",
+            'customer_name': customer_name,
+            'phone': phone,
+            'address': address,
+            'pincode': address_source.get('zip', ''),
+            'product_name': first_item.get('title', 'Abandoned Cart'),
+            'price': float(checkout.get('total_price', 0)),
+            'qty': total_qty,
+            'order_date': checkout.get('created_at')
+        }
+    
     def parse_order(self, order) -> Dict:
         """
         Parse Shopify order into our format
@@ -204,6 +280,32 @@ class MultiStoreManager:
             time.sleep(0.5)  # Rate limiting between stores
         
         return all_orders
+    
+    def fetch_abandoned_carts_all_stores(self, days=7, exclude_ids: List[str] = None) -> Dict[str, List[Dict]]:
+        """
+        Fetch abandoned checkouts from all stores
+        Returns dict: {store_name: [checkouts]}
+        """
+        all_checkouts = {}
+        exclude_ids = exclude_ids or []
+        
+        for store_name, api in self.stores.items():
+            raw_checkouts = api.fetch_abandoned_checkouts(days)
+            parsed_checkouts = []
+            
+            for checkout in raw_checkouts:
+                parsed = api.parse_checkout(checkout)
+                
+                # Skip if already processed
+                if parsed['order_id'] in exclude_ids:
+                    continue
+                
+                parsed_checkouts.append(parsed)
+            
+            all_checkouts[store_name] = parsed_checkouts
+            time.sleep(0.5)  # Rate limiting
+        
+        return all_checkouts
     
     def fetch_store(self, store_name: str, days=10, exclude_ids: List[str] = None) -> List[Dict]:
         """Fetch orders from a specific store"""

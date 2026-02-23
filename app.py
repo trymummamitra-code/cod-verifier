@@ -311,9 +311,49 @@ def fetch_orders():
                 'new_orders': total_new
             })
         
-        elif source == 'shiprocket':
-            # TODO: Implement Shiprocket abandoned cart fetching
-            return jsonify({'error': 'Shiprocket integration coming soon'}), 501
+        elif source == 'abandoned_cart':
+            # Fetch abandoned checkouts from Shopify
+            exclude_ids = db.get_confirmed_cancelled_ids()
+            
+            all_carts = shopify_manager.fetch_abandoned_carts_all_stores(days, exclude_ids)
+            
+            # Save to database
+            total_new = 0
+            for store_name, carts in all_carts.items():
+                stores = db.get_all_stores()
+                store = next((s for s in stores if s['name'] == store_name), None)
+                
+                if not store:
+                    continue
+                
+                for cart in carts:
+                    try:
+                        db.create_order(
+                            cart['order_id'],
+                            store['id'],
+                            'abandoned_cart',  # order_type
+                            cart['customer_name'],
+                            cart['phone'],
+                            cart['address'],
+                            cart['pincode'],
+                            cart['product_name'],
+                            cart['price'],
+                            cart['qty'],
+                            cart['order_date']
+                        )
+                        total_new += 1
+                    except Exception as e:
+                        # Skip duplicates
+                        continue
+            
+            # Auto-distribute to callers
+            distribute_orders()
+            
+            return jsonify({
+                'success': True,
+                'total_fetched': sum(len(carts) for carts in all_carts.values()),
+                'new_orders': total_new
+            })
     
     return render_template('fetch_orders.html')
 
@@ -346,6 +386,51 @@ def distribute_orders():
             if order['store_id'] in store_ids:
                 db.assign_order(order['order_id'], caller_id)
                 break
+
+@app.route('/orders-list')
+@login_required
+@admin_required
+def orders_list():
+    """View all orders with filtering"""
+    # Get filter parameters
+    order_type = request.args.get('type', '')
+    store_id = request.args.get('store', '')
+    status = request.args.get('status', '')
+    
+    # Get all stores for dropdown
+    stores = db.get_all_stores()
+    
+    # Build query
+    query = '''
+        SELECT o.*, s.name as store_name, u.name as caller_name
+        FROM orders o
+        LEFT JOIN shopify_stores s ON o.store_id = s.id
+        LEFT JOIN users u ON o.assigned_to = u.id
+        WHERE 1=1
+    '''
+    params = []
+    
+    if order_type:
+        query += ' AND o.order_type = ?'
+        params.append(order_type)
+    
+    if store_id:
+        query += ' AND o.store_id = ?'
+        params.append(int(store_id))
+    
+    if status:
+        query += ' AND o.status = ?'
+        params.append(status)
+    
+    query += ' ORDER BY o.created_at DESC LIMIT 500'
+    
+    with db.get_connection() as conn:
+        orders = conn.execute(query, params).fetchall()
+    
+    return render_template('orders_list.html',
+                         orders=orders,
+                         stores=stores,
+                         total_orders=len(orders))
 
 @app.route('/call-logs')
 @login_required

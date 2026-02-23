@@ -1,61 +1,290 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Live Agent Dashboard - COD Verifier</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .live-indicator {
+            animation: pulse-slow 2s infinite;
+        }
+        .progress-bar {
+            transition: width 0.5s ease-in-out;
+        }
+        .task-complete {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <div class="container mx-auto p-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-4xl font-bold">🤖 Live Agent Dashboard</h1>
+                <p class="text-gray-400 mt-2">COD Verification System - Real-time Agent Monitoring</p>
+            </div>
+            <div class="text-right">
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 bg-green-500 rounded-full live-indicator"></div>
+                    <span class="text-sm text-gray-400">LIVE</span>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Updated: <span id="last-update">--:--:--</span></p>
+            </div>
+        </div>
 
-{% block title %}Dashboard - COD Verifier{% endblock %}
+        <!-- Agent Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- Backend Tester Agent -->
+            <div class="bg-gray-800 rounded-lg shadow-2xl p-6 border-2 border-blue-500">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-2xl">
+                        🧪
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold">Backend Tester</h2>
+                        <p class="text-sm text-gray-400">Session: backend-tester</p>
+                    </div>
+                </div>
 
-{% block content %}
-<h1 class="text-3xl font-bold mb-8">📊 Real-Time Dashboard</h1>
+                <!-- Current Task -->
+                <div class="mb-4">
+                    <h3 class="text-sm font-semibold text-blue-400 mb-2">💭 CURRENT THINKING:</h3>
+                    <p id="backend-thinking" class="text-sm bg-gray-900 p-3 rounded italic">
+                        Loading...
+                    </p>
+                </div>
 
-<!-- Overall Stats -->
-<div class="grid grid-cols-4 gap-6 mb-8">
-    <div class="bg-white p-6 rounded-lg shadow">
-        <div class="text-gray-500 text-sm">Pending</div>
-        <div class="text-3xl font-bold text-yellow-600">{{ pending }}</div>
+                <!-- Current Task -->
+                <div class="mb-4">
+                    <h3 class="text-sm font-semibold text-green-400 mb-2">⚡ CURRENT TASK:</h3>
+                    <p id="backend-current" class="text-sm bg-gray-900 p-3 rounded font-mono">
+                        Loading...
+                    </p>
+                </div>
+
+                <!-- Progress -->
+                <div class="mb-4">
+                    <h3 class="text-sm font-semibold text-yellow-400 mb-2">📊 PROGRESS:</h3>
+                    <div class="bg-gray-900 rounded-full h-6 overflow-hidden">
+                        <div id="backend-progress" class="progress-bar bg-gradient-to-r from-blue-500 to-purple-500 h-full flex items-center justify-center text-xs font-bold" style="width: 0%">
+                            0%
+                        </div>
+                    </div>
+                    <p id="backend-progress-text" class="text-xs text-gray-400 mt-1">Initializing...</p>
+                </div>
+
+                <!-- Checklist -->
+                <div class="mb-4">
+                    <h3 class="text-sm font-semibold text-purple-400 mb-2">✅ TASK CHECKLIST:</h3>
+                    <div id="backend-checklist" class="bg-gray-900 p-3 rounded space-y-2 text-sm">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" checked disabled class="w-4 h-4">
+                            <span>Admin login test</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" checked disabled class="w-4 h-4">
+                            <span>Caller PIN tests (5 users)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" disabled class="w-4 h-4">
+                            <span>Shopify integration test</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" disabled class="w-4 h-4">
+                            <span>API endpoint documentation</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" disabled class="w-4 h-4">
+                            <span>Security & authorization tests</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" disabled class="w-4 h-4">
+                            <span>Final test report</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Tasks -->
+                <div>
+                    <h3 class="text-sm font-semibold text-orange-400 mb-2">🎯 UPCOMING:</h3>
+                    <ul id="backend-upcoming" class="text-sm bg-gray-900 p-3 rounded space-y-1 list-disc list-inside">
+                        <li>Write comprehensive test report</li>
+                        <li>Document all API endpoints</li>
+                        <li>Create bug list for review</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Android App Developer Agent -->
+            <div class="bg-gray-800 rounded-lg shadow-2xl p-6 border-2 border-green-500">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-2xl">
+                        📱
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold">Android Developer</h2>
+                        <p class="text-sm text-gray-400">Session: android-app-dev</p>
+                    </div>
+                </div>
+
+                <!-- Current Thinking -->
+                <div class="mb-4">
+                    <h3 class="text-sm font-semibold text-blue-400 mb-2">💭 CURRENT THINKING:</h3>
+                    <p id="android-thinking" class="text-sm bg-gray-900 p-3 rounded italic">
+                        Loading...
+                    </p>
+                </div>
+
+                <!-- Current Task -->
+                <div class="mb-4">
+                    <h3 class="text-sm font-semibold text-green-400 mb-2">⚡ CURRENT TASK:</h3>
+                    <p id="android-current" class="text-sm bg-gray-900 p-3 rounded font-mono">
+                        Loading...
+                    </p>
+                </div>
+
+                <!-- Progress -->
+                <div class="mb-4">
+                    <h3 class="text-sm font-semibold text-yellow-400 mb-2">📊 PROGRESS:</h3>
+                    <div class="bg-gray-900 rounded-full h-6 overflow-hidden">
+                        <div id="android-progress" class="progress-bar bg-gradient-to-r from-green-500 to-teal-500 h-full flex items-center justify-center text-xs font-bold" style="width: 0%">
+                            0%
+                        </div>
+                    </div>
+                    <p id="android-progress-text" class="text-xs text-gray-400 mt-1">Initializing...</p>
+                </div>
+
+                <!-- Checklist -->
+                <div class="mb-4">
+                    <h3 class="text-sm font-semibold text-purple-400 mb-2">✅ TASK CHECKLIST:</h3>
+                    <div id="android-checklist" class="bg-gray-900 p-3 rounded space-y-2 text-sm">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" checked disabled class="w-4 h-4">
+                            <span>Read architecture document</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" checked disabled class="w-4 h-4">
+                            <span>Create project structure</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" checked disabled class="w-4 h-4">
+                            <span>Data models & API layer</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" disabled class="w-4 h-4">
+                            <span>Login screen UI</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" disabled class="w-4 h-4">
+                            <span>Call queue screen</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" disabled class="w-4 h-4">
+                            <span>Active call screen (17 buttons)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" disabled class="w-4 h-4">
+                            <span>Auto-dialer logic</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" disabled class="w-4 h-4">
+                            <span>Call recording</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Tasks -->
+                <div>
+                    <h3 class="text-sm font-semibold text-orange-400 mb-2">🎯 UPCOMING:</h3>
+                    <ul id="android-upcoming" class="text-sm bg-gray-900 p-3 rounded space-y-1 list-disc list-inside">
+                        <li>Create login screen layout XML</li>
+                        <li>Build LoginActivity.kt</li>
+                        <li>Test login with live backend</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overall Progress -->
+        <div class="mt-8 bg-gray-800 rounded-lg shadow-2xl p-6 border-2 border-purple-500">
+            <h2 class="text-2xl font-bold mb-4">📈 Overall Project Progress</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="text-sm font-semibold text-blue-400 mb-2">Backend Testing:</h3>
+                    <div class="bg-gray-900 rounded-full h-8 overflow-hidden">
+                        <div class="progress-bar bg-blue-500 h-full flex items-center justify-center text-sm font-bold" style="width: 60%">
+                            60%
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-green-400 mb-2">Android App:</h3>
+                    <div class="bg-gray-900 rounded-full h-8 overflow-hidden">
+                        <div class="progress-bar bg-green-500 h-full flex items-center justify-center text-sm font-bold" style="width: 35%">
+                            35%
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="bg-white p-6 rounded-lg shadow">
-        <div class="text-gray-500 text-sm">Assigned</div>
-        <div class="text-3xl font-bold text-blue-600">{{ assigned }}</div>
-    </div>
-    <div class="bg-white p-6 rounded-lg shadow">
-        <div class="text-gray-500 text-sm">Confirmed</div>
-        <div class="text-3xl font-bold text-green-600">{{ confirmed }}</div>
-    </div>
-    <div class="bg-white p-6 rounded-lg shadow">
-        <div class="text-gray-500 text-sm">Cancelled</div>
-        <div class="text-3xl font-bold text-red-600">{{ cancelled }}</div>
-    </div>
-</div>
 
-<!-- Caller Activity -->
-<h2 class="text-2xl font-bold mb-4">👥 Live Caller Activity</h2>
+    <script>
+        // Auto-refresh every 2 seconds for faster updates
+        async function updateDashboard() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                // Update timestamp
+                document.getElementById('last-update').textContent = data.timestamp || new Date().toLocaleTimeString();
+                
+                // Update backend tester
+                if (data.backend_tester) {
+                    document.getElementById('backend-thinking').textContent = 
+                        data.backend_tester.thinking || "Idle";
+                    document.getElementById('backend-current').textContent = 
+                        data.backend_tester.action || "No current task";
+                    document.getElementById('backend-progress').style.width = 
+                        (data.backend_tester.progress || 0) + '%';
+                    document.getElementById('backend-progress').textContent = 
+                        (data.backend_tester.progress || 0) + '%';
+                    document.getElementById('backend-progress-text').textContent = 
+                        data.backend_tester.status === 'completed' ? 'Testing Complete!' : 'In Progress...';
+                }
+                
+                // Update android dev
+                if (data.android_dev) {
+                    document.getElementById('android-thinking').textContent = 
+                        data.android_dev.thinking || "Idle";
+                    document.getElementById('android-current').textContent = 
+                        data.android_dev.action || "No current task";
+                    document.getElementById('android-progress').style.width = 
+                        (data.android_dev.progress || 0) + '%';
+                    document.getElementById('android-progress').textContent = 
+                        (data.android_dev.progress || 0) + '%';
+                    document.getElementById('android-progress-text').textContent = 
+                        data.android_dev.status === 'active' ? 'Building...' : 'Standby';
+                }
+                
+            } catch (error) {
+                console.error('Failed to update dashboard:', error);
+            }
+        }
 
-<div class="bg-white rounded-lg shadow overflow-hidden">
-    <table class="min-w-full">
-        <thead class="bg-gray-50">
-            <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Caller</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confirmed</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cancelled</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pending</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-            </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-            {% for caller in callers %}
-            <tr>
-                <td class="px-6 py-4 whitespace-nowrap font-medium">{{ caller.name }}</td>
-                <td class="px-6 py-4 whitespace-nowrap">{{ caller.stats.total_calls or 0 }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-green-600">{{ caller.stats.confirmed or 0 }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-red-600">{{ caller.stats.cancelled or 0 }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-yellow-600">{{ caller.stats.pending or 0 }}</td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                        Active
-                    </span>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endblock %}
+        // Initial load
+        updateDashboard();
+        
+        // Auto-refresh every 10 seconds to minimize token usage
+        setInterval(updateDashboard, 10000);
+    </script>
+</body>
+</html>
