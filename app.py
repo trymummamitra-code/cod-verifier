@@ -12,6 +12,7 @@ import jwt
 
 from database import Database
 from shopify_api import MultiStoreManager
+from shiprocket_api import ShiprocketAPI
 
 # Load environment variables
 load_dotenv()
@@ -42,6 +43,12 @@ shopify_stores = [
 ]
 
 shopify_manager = MultiStoreManager(shopify_stores)
+
+# Initialize Shiprocket API
+shiprocket_api = ShiprocketAPI(
+    email=os.getenv('SHIPROCKET_EMAIL', 'srreportpullapi@gmail.com'),
+    password=os.getenv('SHIPROCKET_PASSWORD')
+)
 
 # ============= INITIALIZATION =============
 
@@ -312,12 +319,58 @@ def fetch_orders():
             })
         
         elif source == 'abandoned_cart':
-            # TODO: Fetch abandoned checkouts from Shiprocket
-            # Will need Shiprocket API credentials and checkout endpoint
-            return jsonify({
-                'success': False,
-                'error': 'Shiprocket abandoned cart integration coming soon. Need API credentials.'
-            }), 501
+            # Fetch abandoned carts from Shiprocket
+            try:
+                carts = shiprocket_api.fetch_abandoned_carts(days)
+                
+                if not carts:
+                    return jsonify({
+                        'success': True,
+                        'total_fetched': 0,
+                        'new_orders': 0,
+                        'message': 'No abandoned carts found or endpoint not supported by Shiprocket'
+                    })
+                
+                # Save to database
+                total_new = 0
+                stores = db.get_all_stores()
+                
+                for cart in carts:
+                    try:
+                        # Try to match store by name, or use first store as default
+                        store = next((s for s in stores if s['name'].lower() in cart.get('store', '').lower()), stores[0])
+                        
+                        db.create_order(
+                            f"CART-{cart['cart_id']}",
+                            store['id'],
+                            'abandoned_cart',
+                            cart['customer_name'],
+                            cart['phone'],
+                            cart['address'],
+                            cart['pincode'],
+                            cart['product_name'],
+                            cart['total_price'],
+                            cart['qty'],
+                            cart['created_at']
+                        )
+                        total_new += 1
+                    except Exception as e:
+                        # Skip duplicates or errors
+                        continue
+                
+                # Auto-distribute to callers
+                distribute_orders()
+                
+                return jsonify({
+                    'success': True,
+                    'total_fetched': len(carts),
+                    'new_orders': total_new
+                })
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
     
     return render_template('fetch_orders.html')
 
