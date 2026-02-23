@@ -4,11 +4,14 @@ COD Verification System - Main Flask Application
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from functools import wraps
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
 import jwt
+import csv
+import io
 
 from database import Database
 from shopify_api import MultiStoreManager
@@ -448,6 +451,159 @@ def orders_list():
                          orders=orders,
                          stores=stores,
                          total_orders=len(orders))
+
+@app.route('/upload-carts', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def upload_carts():
+    """Upload abandoned carts CSV"""
+    if request.method == 'POST':
+        # Check if file was uploaded
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+        
+        # Get default store if provided
+        default_store_id = request.form.get('default_store')
+        
+        try:
+            # Read CSV file
+            stream = io.StringIO(file.stream.read().decode('utf-8'), newline=None)
+            csv_reader = csv.DictReader(stream)
+            
+            # Parse rows
+            rows = list(csv_reader)
+            if not rows:
+                return jsonify({'success': False, 'error': 'CSV file is empty'}), 400
+            
+            # Get stores for matching
+            stores = db.get_all_stores()
+            default_store = stores[0] if stores else None
+            if default_store_id:
+                default_store = next((s for s in stores if s['id'] == int(default_store_id)), default_store)
+            
+            # Process each row
+            imported = 0
+            skipped = 0
+            preview_data = []
+            
+            for row in rows:
+                try:
+                    # Parse row data (flexible column matching)
+                    order_data = parse_csv_row(row, default_store, stores)
+                    
+                    if not order_data:
+                        skipped += 1
+                        continue
+                    
+                    # Save to database
+                    db.create_order(
+                        order_data['order_id'],
+                        order_data['store_id'],
+                        'abandoned_cart',
+                        order_data['customer_name'],
+                        order_data['phone'],
+                        order_data['address'],
+                        order_data['pincode'],
+                        order_data['product_name'],
+                        order_data['price'],
+                        order_data['qty'],
+                        order_data['order_date']
+                    )
+                    imported += 1
+                    preview_data.append(order_data)
+                    
+                except Exception as e:
+                    # Skip duplicates or invalid rows
+                    skipped += 1
+                    continue
+            
+            # Auto-distribute to callers
+            distribute_orders()
+            
+            return jsonify({
+                'success': True,
+                'total_rows': len(rows),
+                'imported': imported,
+                'skipped': skipped,
+                'preview': preview_data[:10]
+            })
+            
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'details': 'Failed to parse CSV. Check file format.'
+            }), 500
+    
+    # GET request - show upload form
+    stores = db.get_all_stores()
+    return render_template('upload_carts.html', stores=stores)
+
+def parse_csv_row(row: dict, default_store: dict, all_stores: list) -> dict:
+    """Parse CSV row with flexible column matching"""
+    # Normalize column names (lowercase, remove spaces)
+    normalized = {k.lower().strip().replace(' ', '_'): v for k, v in row.items()}
+    
+    # Find columns (try multiple possible names)
+    def get_value(*keys):
+        for key in keys:
+            if key in normalized and normalized[key]:
+                return normalized[key].strip()
+        return ''
+    
+    # Required fields
+    order_id = get_value('order_id', 'id', 'order_number', 'cart_id', 'checkout_id')
+    customer_name = get_value('customer_name', 'name', 'customer', 'buyer_name')
+    phone = get_value('phone', 'mobile', 'contact', 'phone_number', 'customer_phone')
+    product_name = get_value('product', 'product_name', 'item', 'product_title', 'sku')
+    price = get_value('price', 'amount', 'total', 'total_price', 'value')
+    
+    # Validate required fields
+    if not order_id or not phone:
+        return None
+    
+    # Optional fields
+    address = get_value('address', 'shipping_address', 'customer_address', 'delivery_address')
+    pincode = get_value('pincode', 'zip', 'postal_code', 'pin')
+    qty = get_value('qty', 'quantity', 'items', 'count')
+    store_name = get_value('store', 'store_name', 'channel', 'source')
+    order_date = get_value('date', 'created_at', 'order_date', 'timestamp')
+    
+    # Match store
+    store = default_store
+    if store_name:
+        matched = next((s for s in all_stores if s['name'].lower() in store_name.lower()), None)
+        if matched:
+            store = matched
+    
+    # Parse numeric values
+    try:
+        price = float(price.replace(',', '').replace('₹', '').strip()) if price else 0.0
+    except:
+        price = 0.0
+    
+    try:
+        qty = int(qty) if qty else 1
+    except:
+        qty = 1
+    
+    return {
+        'order_id': f"CART-{order_id}" if not order_id.startswith('CART-') else order_id,
+        'store_id': store['id'] if store else 1,
+        'customer_name': customer_name or 'Unknown',
+        'phone': phone,
+        'address': address or 'No address',
+        'pincode': pincode or '',
+        'product_name': product_name or 'Abandoned Cart',
+        'price': price,
+        'qty': qty,
+        'order_date': order_date or datetime.now().isoformat(),
+        'store': store['name'] if store else 'Unknown'
+    }
 
 @app.route('/call-logs')
 @login_required

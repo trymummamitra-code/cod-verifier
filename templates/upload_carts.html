@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Abandoned Carts{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">📤 Upload Abandoned Carts CSV</h2>
+        
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <h3 class="font-semibold text-blue-800 mb-2">📋 Instructions:</h3>
+            <ol class="list-decimal list-inside text-sm text-blue-700 space-y-1">
+                <li>Export abandoned carts from Shiprocket dashboard</li>
+                <li>Upload the CSV file below</li>
+                <li>System will auto-import and assign to callers</li>
+            </ol>
+        </div>
+
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <h3 class="font-semibold text-yellow-800 mb-2">✅ Required CSV Columns:</h3>
+            <div class="text-sm text-yellow-700 space-y-1">
+                <p><strong>Required:</strong> Order ID, Customer Name, Phone, Product, Price</p>
+                <p><strong>Optional:</strong> Address, Pincode, Qty, Store, Date</p>
+                <p><strong>Note:</strong> Column names are auto-detected (flexible matching)</p>
+            </div>
+        </div>
+
+        <!-- Upload Form -->
+        <form id="uploadForm" enctype="multipart/form-data" class="mb-6">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Select CSV File</label>
+                <input type="file" 
+                       id="csvFile" 
+                       name="file" 
+                       accept=".csv,.xlsx,.xls"
+                       class="w-full border border-gray-300 rounded px-3 py-2"
+                       required>
+                <p class="text-xs text-gray-500 mt-1">Supported formats: CSV, Excel (.xlsx, .xls)</p>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Assign to Store (Optional)</label>
+                <select id="defaultStore" class="w-full border border-gray-300 rounded px-3 py-2">
+                    <option value="">Auto-detect from CSV</option>
+                    {% for store in stores %}
+                    <option value="{{ store.id }}">{{ store.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <button type="submit" 
+                    class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700">
+                📤 Upload & Import
+            </button>
+        </form>
+
+        <!-- Result Display -->
+        <div id="result" class="hidden"></div>
+
+        <!-- Preview Table -->
+        <div id="preview" class="hidden mt-6">
+            <h3 class="text-lg font-semibold mb-3">📊 Import Preview (First 10 rows)</h3>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Store</th>
+                        </tr>
+                    </thead>
+                    <tbody id="previewTable" class="bg-white divide-y divide-gray-200">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const fileInput = document.getElementById('csvFile');
+    const defaultStore = document.getElementById('defaultStore').value;
+    const resultDiv = document.getElementById('result');
+    const previewDiv = document.getElementById('preview');
+    
+    if (!fileInput.files[0]) {
+        alert('Please select a file');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    if (defaultStore) {
+        formData.append('default_store', defaultStore);
+    }
+    
+    // Show loading
+    resultDiv.innerHTML = '<p class="text-blue-600">⏳ Uploading and processing CSV...</p>';
+    resultDiv.classList.remove('hidden');
+    previewDiv.classList.add('hidden');
+    
+    try {
+        const response = await fetch('/upload-carts', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            resultDiv.innerHTML = `
+                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+                    ✅ Import Successful!<br>
+                    <strong>Total rows:</strong> ${data.total_rows}<br>
+                    <strong>Imported:</strong> ${data.imported}<br>
+                    <strong>Skipped:</strong> ${data.skipped} (duplicates/errors)<br>
+                    <strong>Assigned to callers:</strong> Yes
+                </div>
+            `;
+            
+            // Show preview
+            if (data.preview && data.preview.length > 0) {
+                showPreview(data.preview);
+            }
+            
+            // Clear file input
+            fileInput.value = '';
+        } else {
+            resultDiv.innerHTML = `
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                    ❌ Error: ${data.error || 'Failed to import CSV'}<br>
+                    ${data.details ? '<small>' + data.details + '</small>' : ''}
+                </div>
+            `;
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                ❌ Upload failed: ${error.message}
+            </div>
+        `;
+    }
+});
+
+function showPreview(rows) {
+    const previewDiv = document.getElementById('preview');
+    const tableBody = document.getElementById('previewTable');
+    
+    tableBody.innerHTML = '';
+    rows.slice(0, 10).forEach(row => {
+        const tr = document.createElement('tr');
+        tr.classList.add('hover:bg-gray-50');
+        tr.innerHTML = `
+            <td class="px-3 py-2 text-sm">${row.order_id}</td>
+            <td class="px-3 py-2 text-sm">${row.customer_name}</td>
+            <td class="px-3 py-2 text-sm font-mono">${row.phone}</td>
+            <td class="px-3 py-2 text-sm">${row.product_name.substring(0, 30)}...</td>
+            <td class="px-3 py-2 text-sm">₹${row.price}</td>
+            <td class="px-3 py-2 text-sm">${row.store || '-'}</td>
+        `;
+        tableBody.appendChild(tr);
+    });
+    
+    previewDiv.classList.remove('hidden');
+}
+</script>
+{% endblock %}
