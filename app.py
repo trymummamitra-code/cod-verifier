@@ -677,6 +677,59 @@ def api_get_queue(caller_id):
     
     return jsonify({'orders': orders_list})
 
+@app.route('/api/orders/by-status/<int:caller_id>')
+def api_get_orders_by_status(caller_id):
+    """API: Get orders filtered by status for caller (for Status Dashboard)"""
+    status_filter = request.args.get('status', 'all')
+    
+    # Build query based on status filter
+    query = '''
+        SELECT o.*, c.name as caller_name
+        FROM orders o
+        LEFT JOIN users c ON o.assigned_to = c.id
+        WHERE o.assigned_to = ?
+    '''
+    params = [caller_id]
+    
+    if status_filter == 'pending':
+        query += " AND o.status = 'pending'"
+    elif status_filter == 'confirmed':
+        query += " AND o.status = 'confirmed'"
+    elif status_filter == 'cancelled':
+        query += " AND o.status = 'cancelled'"
+    elif status_filter == 'retry':
+        query += " AND o.status IN ('calling', 'assigned')"
+    
+    query += " ORDER BY o.updated_at DESC LIMIT 500"
+    
+    with db.get_connection() as conn:
+        orders = conn.execute(query, params).fetchall()
+    
+    orders_list = []
+    for order in orders:
+        orders_list.append({
+            'id': order['id'],
+            'order_id': order['order_id'],
+            'customer_name': order['customer_name'],
+            'phone': order['phone'],
+            'address': order['address'],
+            'pincode': order['pincode'],
+            'product_name': order['product_name'],
+            'price': order['price'],
+            'qty': order['qty'],
+            'status': order['status'],
+            'final_status': order['final_status'],
+            'attempts': order['attempts'],
+            'completed_at': order['completed_at'],
+            'updated_at': order['updated_at']
+        })
+    
+    return jsonify({
+        'orders': orders_list,
+        'total': len(orders_list),
+        'filter': status_filter
+    })
+
 @app.route('/api/orders/update-status', methods=['POST'])
 def api_update_status():
     """API: Update order status (called from Android app)"""
