@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Store Assignment - COD Verifier{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-8">🏪 Store Assignment</h1>
+
+<div class="bg-white rounded-lg shadow p-6">
+    <p class="text-gray-600 mb-6">Assign stores to callers for today's calling session</p>
+    
+    <form id="assignmentForm">
+        {% for caller in callers %}
+        <div class="mb-6 p-4 border rounded-lg">
+            <h3 class="font-bold text-lg mb-3">{{ caller.name }}</h3>
+            <div class="grid grid-cols-3 gap-4">
+                {% for store in stores %}
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" name="caller_{{ caller.id }}_store" value="{{ store.id }}"
+                           class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <span>{{ store.name }}</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        
+        <button type="submit" 
+                class="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700">
+            Save Assignments
+        </button>
+    </form>
+</div>
+
+<script>
+document.getElementById('assignmentForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const assignments = [];
+    
+    {% for caller in callers %}
+    const caller{{ caller.id }}_stores = formData.getAll('caller_{{ caller.id }}_store');
+    caller{{ caller.id }}_stores.forEach(storeId => {
+        assignments.push({
+            caller_id: {{ caller.id }},
+            store_id: parseInt(storeId)
+        });
+    });
+    {% endfor %}
+    
+    const response = await fetch('/store-assignment', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({assignments})
+    });
+    
+    if (response.ok) {
+        alert('✅ Assignments saved!');
+    } else {
+        alert('❌ Error saving assignments');
+    }
+});
+</script>
+{% endblock %}

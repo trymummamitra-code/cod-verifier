@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}My Queue - COD Verifier{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-8">📋 My Order Queue</h1>
+
+<div class="bg-white rounded-lg shadow p-6">
+    <p class="text-gray-600 mb-4">You have {{ orders|length }} orders assigned</p>
+    
+    <div class="space-y-4">
+        {% for order in orders %}
+        <div class="border rounded-lg p-4 hover:bg-gray-50">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="font-bold text-lg">{{ order.order_id }}</h3>
+                    <p class="text-gray-600">{{ order.customer_name }}</p>
+                    <p class="text-sm text-gray-500">📞 {{ order.phone }}</p>
+                    <p class="text-sm text-gray-500">📍 {{ order.address }}</p>
+                </div>
+                <div class="text-right">
+                    <p class="font-semibold">₹{{ order.price }}</p>
+                    <p class="text-sm text-gray-500">Qty: {{ order.qty }}</p>
+                    <p class="text-xs text-gray-400">Attempts: {{ order.attempts }}</p>
+                </div>
+            </div>
+            <div class="mt-2">
+                <p class="text-sm font-medium text-gray-700">{{ order.product_name }}</p>
+            </div>
+        </div>
+        {% endfor %}
+        
+        {% if not orders %}
+        <div class="text-center py-12">
+            <p class="text-gray-500 text-lg">No orders assigned yet</p>
+            <p class="text-gray-400 text-sm mt-2">Check back later or contact admin</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

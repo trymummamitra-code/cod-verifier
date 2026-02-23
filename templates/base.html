@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}COD Verifier{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50">
+    {% if session.user_id %}
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <span class="text-xl font-bold text-blue-600">🤖 COD Verifier</span>
+                </div>
+                {% if session.role == 'admin' %}
+                <div class="flex items-center space-x-4">
+                    <a href="/dashboard" class="text-gray-700 hover:text-blue-600">Dashboard</a>
+                    <a href="/store-assignment" class="text-gray-700 hover:text-blue-600">Store Assignment</a>
+                    <a href="/fetch-orders" class="text-gray-700 hover:text-blue-600">Fetch Orders</a>
+                    <a href="/call-logs" class="text-gray-700 hover:text-blue-600">Call Logs</a>
+                    <a href="/reports" class="text-gray-700 hover:text-blue-600">Reports</a>
+                    <a href="/logout" class="text-red-600 hover:text-red-800">Logout</a>
+                </div>
+                {% else %}
+                <div class="flex items-center space-x-4">
+                    <span class="text-gray-700">{{ session.name }}</span>
+                    <a href="/logout" class="text-red-600 hover:text-red-800">Logout</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+    
+    <div class="{% if session.user_id %}max-w-7xl mx-auto px-4 py-8{% endif %}">
+        {% block content %}{% endblock %}
+    </div>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

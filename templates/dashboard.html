@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - COD Verifier{% endblock %}
+
+{% block content %}
+<h1 class="text-3xl font-bold mb-8">📊 Real-Time Dashboard</h1>
+
+<!-- Overall Stats -->
+<div class="grid grid-cols-4 gap-6 mb-8">
+    <div class="bg-white p-6 rounded-lg shadow">
+        <div class="text-gray-500 text-sm">Pending</div>
+        <div class="text-3xl font-bold text-yellow-600">{{ pending }}</div>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow">
+        <div class="text-gray-500 text-sm">Assigned</div>
+        <div class="text-3xl font-bold text-blue-600">{{ assigned }}</div>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow">
+        <div class="text-gray-500 text-sm">Confirmed</div>
+        <div class="text-3xl font-bold text-green-600">{{ confirmed }}</div>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow">
+        <div class="text-gray-500 text-sm">Cancelled</div>
+        <div class="text-3xl font-bold text-red-600">{{ cancelled }}</div>
+    </div>
+</div>
+
+<!-- Caller Activity -->
+<h2 class="text-2xl font-bold mb-4">👥 Live Caller Activity</h2>
+
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="min-w-full">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Caller</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Confirmed</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cancelled</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pending</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+            {% for caller in callers %}
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap font-medium">{{ caller.name }}</td>
+                <td class="px-6 py-4 whitespace-nowrap">{{ caller.stats.total_calls or 0 }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-green-600">{{ caller.stats.confirmed or 0 }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-red-600">{{ caller.stats.cancelled or 0 }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-yellow-600">{{ caller.stats.pending or 0 }}</td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                        Active
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
