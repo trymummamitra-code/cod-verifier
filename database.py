@@ -332,8 +332,9 @@ class Database:
         with self.get_connection() as conn:
             c = conn.cursor()
             c.execute('''
-                INSERT OR REPLACE INTO store_assignments (store_id, caller_id, assigned_date)
+                INSERT INTO store_assignments (store_id, caller_id, assigned_date)
                 VALUES (?, ?, ?)
+                ON CONFLICT (store_id, caller_id, assigned_date) DO NOTHING
             ''', (store_id, caller_id, assigned_date))
             return c.lastrowid
     
