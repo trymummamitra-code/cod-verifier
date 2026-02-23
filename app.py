@@ -238,6 +238,23 @@ def store_assignment():
                          callers=callers,
                          assignments=today_assignments)
 
+@app.route('/api/debug/shopify-config')
+@login_required
+@admin_required
+def debug_shopify_config():
+    """Debug endpoint to check Shopify configuration"""
+    config = []
+    for i in range(1, 4):
+        store_name = os.getenv(f'SHOPIFY_STORE_{i}_NAME')
+        token = os.getenv(f'SHOPIFY_STORE_{i}_TOKEN')
+        config.append({
+            'store': i,
+            'name': store_name,
+            'has_token': bool(token),
+            'token_preview': token[:20] + '...' if token else None
+        })
+    return jsonify(config)
+
 @app.route('/fetch-orders', methods=['GET', 'POST'])
 @login_required
 @admin_required
