@@ -36,9 +36,16 @@ class ShopifyAPI:
             response.raise_for_status()
             return response.json()
         
+        except requests.exceptions.Timeout:
+            print(f"❌ Shopify API Timeout for {self.shop_name}")
+            raise Exception(f"Shopify API timeout for {self.shop_name}")
+        except requests.exceptions.HTTPError as e:
+            print(f"❌ Shopify HTTP Error for {self.shop_name}: {e}")
+            print(f"Response: {e.response.text if e.response else 'No response'}")
+            raise Exception(f"Shopify API error: {e}")
         except requests.exceptions.RequestException as e:
-            print(f"❌ Shopify API Error: {e}")
-            return None
+            print(f"❌ Shopify API Error for {self.shop_name}: {e}")
+            raise Exception(f"Shopify API request failed: {e}")
     
     def fetch_cod_orders(self, days=10) -> List[Dict]:
         """
