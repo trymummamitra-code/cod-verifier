@@ -117,8 +117,8 @@ class ShopifyAPI:
         """
         Parse Shopify order into our format
         """
-        customer = order.get('customer', {})
-        shipping = order.get('shipping_address', {})
+        customer = order.get('customer') or {}
+        shipping = order.get('shipping_address') or {}
         line_items = order.get('line_items', [])
         
         # Get first line item details
@@ -134,7 +134,7 @@ class ShopifyAPI:
             shipping.get('city', ''),
             shipping.get('province', '')
         ]
-        address = ', '.join([p for p in address_parts if p])
+        address = ', '.join([p for p in address_parts if p]) or 'No address provided'
         
         # Get phone (try multiple sources)
         phone = (
@@ -146,7 +146,7 @@ class ShopifyAPI:
         
         return {
             'order_id': order.get('name'),  # e.g., "#1001"
-            'customer_name': f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip(),
+            'customer_name': f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip() or 'Unknown Customer',
             'phone': phone,
             'address': address,
             'pincode': shipping.get('zip', ''),
