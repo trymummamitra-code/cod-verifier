@@ -944,12 +944,13 @@ def reassign_caller():
             c = conn.cursor()
             
             # Count orders to reassign
-            c.execute("SELECT COUNT(*) FROM orders WHERE assigned_to = ?", (from_caller_id,))
+            query = "SELECT COUNT(*) FROM orders WHERE assigned_to = ?"
+            c.execute(db.convert_query(query), (from_caller_id,))
             count = c.fetchone()[0]
             
             # Reassign
-            c.execute("UPDATE orders SET assigned_to = ? WHERE assigned_to = ?", 
-                     (to_caller_id, from_caller_id))
+            query = "UPDATE orders SET assigned_to = ? WHERE assigned_to = ?"
+            c.execute(db.convert_query(query), (to_caller_id, from_caller_id))
             
             return jsonify({
                 'success': True,
@@ -971,11 +972,13 @@ def delete_all_orders():
             c = conn.cursor()
             
             # Count before delete
-            c.execute("SELECT COUNT(*) FROM orders")
+            query = "SELECT COUNT(*) FROM orders"
+            c.execute(db.convert_query(query))
             count = c.fetchone()[0]
             
             # Delete all orders
-            c.execute("DELETE FROM orders")
+            query = "DELETE FROM orders"
+            c.execute(db.convert_query(query))
             
             return jsonify({
                 'success': True,
@@ -997,11 +1000,13 @@ def assign_all_to_caller():
             c = conn.cursor()
             
             # Count orders to assign
-            c.execute("SELECT COUNT(*) FROM orders")
-            count = c.fetchone()[0]
+            query = "SELECT COUNT(*) FROM orders"
+            c.execute(db.convert_query(query))
+            count = c.fetchone()[0] if db.is_postgres else c.fetchone()[0]
             
             # Assign all to specified caller
-            c.execute("UPDATE orders SET assigned_to = ?, status = 'assigned' WHERE 1=1", (caller_id,))
+            query = "UPDATE orders SET assigned_to = ?, status = 'assigned' WHERE 1=1"
+            c.execute(db.convert_query(query), (caller_id,))
             
             return jsonify({
                 'success': True,
