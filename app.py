@@ -696,7 +696,8 @@ def api_get_orders_by_status(caller_id):
             'final_status': order['final_status'],
             'attempts': order['attempts'],
             'completed_at': order['completed_at'],
-            'updated_at': order['updated_at']
+            'updated_at': order['updated_at'],
+            'store_id': order.get('store_id')  # Include store_id for Shopify sync
         })
     
     return jsonify({
@@ -759,17 +760,20 @@ def api_update_status():
     # Update order status based on disposition
     if 'confirm' in status.lower():
         db.update_order_status(order_id, 'confirmed', status)
-        # Add Shopify tag: COD-Confirmed
-        add_shopify_tag_async(order_id, order['store_id'], 'COD-Confirmed')
+        # Add Shopify tag: COD-Confirmed (skip if no store_id)
+        if order.get('store_id'):
+            add_shopify_tag_async(order_id, order['store_id'], 'COD-Confirmed')
     elif 'cancel' in status.lower():
         db.update_order_status(order_id, 'cancelled', status)
-        # Add Shopify tag: COD-Cancelled
-        add_shopify_tag_async(order_id, order['store_id'], 'COD-Cancelled')
+        # Add Shopify tag: COD-Cancelled (skip if no store_id)
+        if order.get('store_id'):
+            add_shopify_tag_async(order_id, order['store_id'], 'COD-Cancelled')
     else:
         # Retry status - put back in queue
         db.update_order_status(order_id, 'assigned', status)
-        # Add Shopify tag: COD-Retry
-        add_shopify_tag_async(order_id, order['store_id'], 'COD-Retry')
+        # Add Shopify tag: COD-Retry (skip if no store_id)
+        if order.get('store_id'):
+            add_shopify_tag_async(order_id, order['store_id'], 'COD-Retry')
     
     return jsonify({'success': True})
 
