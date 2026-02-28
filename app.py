@@ -120,7 +120,7 @@ def index():
     """Landing page"""
     if 'user_id' in session:
         if session.get('role') == 'admin':
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('orders_list'))
         else:
             return redirect(url_for('caller_queue'))
     return redirect(url_for('login'))
@@ -162,7 +162,7 @@ def login():
                 
                 if request.is_json:
                     return jsonify({'success': True, 'role': 'admin'})
-                return redirect(url_for('dashboard'))
+                return redirect(url_for('orders_list'))
             else:
                 if request.is_json:
                     return jsonify({'error': 'Invalid credentials'}), 401
@@ -187,33 +187,8 @@ def logout():
 @login_required
 @admin_required
 def dashboard():
-    """Admin dashboard - real-time caller activity"""
-    # Get all callers
-    callers = db.get_all_callers()
-    
-    # Get stats for each caller
-    caller_stats = []
-    for caller in callers:
-        stats = db.get_stats_for_caller(caller['id'], datetime.now().date())
-        caller_stats.append({
-            'id': caller['id'],
-            'name': caller['name'],
-            'stats': stats
-        })
-    
-    # Get today's overall stats
-    today = datetime.now().date()
-    pending_orders = db.get_orders_by_status('pending')
-    assigned_orders = db.get_orders_by_status('assigned')
-    confirmed_orders = db.get_orders_by_status('confirmed')
-    cancelled_orders = db.get_orders_by_status('cancelled')
-    
-    return render_template('dashboard.html',
-                         callers=caller_stats,
-                         pending=len(pending_orders),
-                         assigned=len(assigned_orders),
-                         confirmed=len(confirmed_orders),
-                         cancelled=len(cancelled_orders))
+    """Redirect to orders list (dashboard removed)"""
+    return redirect(url_for('orders_list'))
 
 @app.route('/store-assignment', methods=['GET', 'POST'])
 @login_required
@@ -779,13 +754,139 @@ def api_update_status():
     # Update order status based on disposition
     if 'confirm' in status.lower():
         db.update_order_status(order_id, 'confirmed', status)
+        # Add Shopify tag: COD-Confirmed
+        add_shopify_tag_async(order_id, order['store_id'], 'COD-Confirmed')
     elif 'cancel' in status.lower():
         db.update_order_status(order_id, 'cancelled', status)
+        # Add Shopify tag: COD-Cancelled
+        add_shopify_tag_async(order_id, order['store_id'], 'COD-Cancelled')
     else:
         # Retry status - put back in queue
         db.update_order_status(order_id, 'assigned', status)
+        # Add Shopify tag: COD-Retry
+        add_shopify_tag_async(order_id, order['store_id'], 'COD-Retry')
     
     return jsonify({'success': True})
+
+@app.route('/api/orders/edit', methods=['POST'])
+def api_edit_order():
+    """API: Edit order customer details (syncs to Shopify)"""
+    data = request.json
+    
+    order_id = data.get('order_id')
+    customer_name = data.get('customer_name', '').strip()
+    phone = data.get('phone', '').strip()
+    address = data.get('address', '').strip()
+    pincode = data.get('pincode', '').strip()
+    
+    # Validate inputs
+    if not order_id or not customer_name or not phone or not address:
+        return jsonify({
+            'success': False,
+            'message': 'Missing required fields'
+        }), 400
+    
+    # Get order
+    order = db.get_order_by_id(order_id)
+    if not order:
+        return jsonify({
+            'success': False,
+            'message': 'Order not found'
+        }), 404
+    
+    # Update database with edits
+    db.update_order_edits(
+        order_id,
+        customer_name,
+        phone,
+        address,
+        pincode
+    )
+    
+    # Sync to Shopify (async, don't block response)
+    shopify_synced = sync_order_to_shopify(
+        order_id,
+        order['store_id'],
+        customer_name,
+        phone,
+        address,
+        pincode
+    )
+    
+    return jsonify({
+        'success': True,
+        'message': 'Order updated successfully',
+        'shopify_synced': shopify_synced
+    })
+
+def sync_order_to_shopify(order_id: str, store_id: int, customer_name: str, 
+                          phone: str, address: str, pincode: str) -> bool:
+    """Sync order edits to Shopify (with error handling)"""
+    try:
+        # Get store details
+        store = db.get_store_by_id(store_id)
+        if not store:
+            print(f"❌ Store not found for order {order_id}")
+            return False
+        
+        # Find the Shopify API client for this store
+        shopify_api = None
+        for store_name, api in shopify_manager.stores.items():
+            if store_name == store['name']:
+                shopify_api = api
+                break
+        
+        if not shopify_api:
+            print(f"❌ Shopify API client not found for store {store['name']}")
+            return False
+        
+        # Update order on Shopify
+        success = shopify_api.update_order_customer_info(
+            order_id,
+            customer_name,
+            phone,
+            address,
+            pincode
+        )
+        
+        if success:
+            db.mark_shopify_synced(order_id)
+            print(f"✅ Order {order_id} synced to Shopify")
+        else:
+            print(f"⚠️ Order {order_id} updated in database but Shopify sync failed")
+        
+        return success
+        
+    except Exception as e:
+        print(f"❌ Shopify sync error for order {order_id}: {e}")
+        return False
+
+def add_shopify_tag_async(order_id: str, store_id: int, tag: str):
+    """Add tag to Shopify order (async, logs errors but doesn't block)"""
+    try:
+        # Get store details
+        store = db.get_store_by_id(store_id)
+        if not store:
+            print(f"❌ Store not found for order {order_id}")
+            return
+        
+        # Find the Shopify API client for this store
+        shopify_api = None
+        for store_name, api in shopify_manager.stores.items():
+            if store_name == store['name']:
+                shopify_api = api
+                break
+        
+        if not shopify_api:
+            print(f"❌ Shopify API client not found for store {store['name']}")
+            return
+        
+        # Add tag to order
+        shopify_api.add_order_tags(order_id, [tag])
+        print(f"✅ Added tag '{tag}' to order {order_id} on Shopify")
+        
+    except Exception as e:
+        print(f"❌ Failed to add tag to order {order_id}: {e}")
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
@@ -823,3 +924,63 @@ def api_login():
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=True)
+
+# ============= ADMIN UTILITY ROUTES =============
+
+@app.route('/api/admin/reassign-caller', methods=['POST'])
+@login_required
+@admin_required
+def reassign_caller():
+    """Reassign all orders from one caller to another"""
+    data = request.json
+    from_caller_id = data.get('from_caller_id')
+    to_caller_id = data.get('to_caller_id')
+    
+    if not from_caller_id or not to_caller_id:
+        return jsonify({'success': False, 'error': 'Missing caller IDs'}), 400
+    
+    try:
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            
+            # Count orders to reassign
+            c.execute("SELECT COUNT(*) FROM orders WHERE assigned_to = ?", (from_caller_id,))
+            count = c.fetchone()[0]
+            
+            # Reassign
+            c.execute("UPDATE orders SET assigned_to = ? WHERE assigned_to = ?", 
+                     (to_caller_id, from_caller_id))
+            
+            return jsonify({
+                'success': True,
+                'reassigned_count': count,
+                'from_caller': from_caller_id,
+                'to_caller': to_caller_id
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/admin/delete-all-orders', methods=['POST'])
+@login_required
+@admin_required
+def delete_all_orders():
+    """Delete all orders from database (for testing/reset)"""
+    try:
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            
+            # Count before delete
+            c.execute("SELECT COUNT(*) FROM orders")
+            count = c.fetchone()[0]
+            
+            # Delete all orders
+            c.execute("DELETE FROM orders")
+            
+            return jsonify({
+                'success': True,
+                'deleted_count': count
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
