@@ -1,6 +1,6 @@
 """
 COD Verification System - Database Module
-SQLite database helper (similar to WMS pattern)
+Supports both SQLite (local dev) and PostgreSQL (production)
 """
 
 import sqlite3
@@ -8,18 +8,42 @@ import os
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 
+try:
+    import psycopg2
+    import psycopg2.extras
+    POSTGRES_AVAILABLE = True
+except ImportError:
+    POSTGRES_AVAILABLE = False
+
 DB_FILE = "cod_verifier.db"
 
 class Database:
-    def __init__(self, db_path=None):
+    def __init__(self, db_path=None, database_url=None):
         self.db_path = db_path or DB_FILE
+        self.database_url = database_url or os.getenv('DATABASE_URL')
+        self.is_postgres = bool(self.database_url and self.database_url.startswith('postgres'))
+        
+        if self.is_postgres and not POSTGRES_AVAILABLE:
+            raise ImportError("psycopg2 not installed. Install with: pip install psycopg2-binary")
+        
+        print(f"✅ Database initialized successfully")
+        if self.is_postgres:
+            print(f"   Using PostgreSQL (Railway production)")
+        else:
+            print(f"   Using SQLite (local dev): {self.db_path}")
+        
         self.init_database()
     
     @contextmanager
     def get_connection(self):
         """Context manager for database connections"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        if self.is_postgres:
+            conn = psycopg2.connect(self.database_url)
+            conn.cursor_factory = psycopg2.extras.RealDictCursor
+        else:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+        
         try:
             yield conn
             conn.commit()
@@ -29,15 +53,30 @@ class Database:
         finally:
             conn.close()
     
+    def convert_query(self, query):
+        """Convert SQLite syntax to PostgreSQL when needed"""
+        if not self.is_postgres:
+            return query
+        
+        # Replace ? placeholders with %s for PostgreSQL
+        query = query.replace('?', '%s')
+        
+        # Replace SQLite functions
+        query = query.replace("datetime('now')", "CURRENT_TIMESTAMP")
+        query = query.replace("AUTOINCREMENT", "")  # PostgreSQL uses SERIAL
+        query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+        
+        return query
+    
     def init_database(self):
         """Initialize database schema"""
         with self.get_connection() as conn:
             c = conn.cursor()
             
             # Users table (callers + admin)
-            c.execute('''
+            query = '''
                 CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     name TEXT NOT NULL,
                     role TEXT NOT NULL CHECK(role IN ('caller', 'admin')),
                     pin TEXT,
@@ -46,23 +85,25 @@ class Database:
                     is_active INTEGER DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            ''')
+            '''
+            c.execute(self.convert_query(query))
             
             # Shopify stores
-            c.execute('''
+            query = '''
                 CREATE TABLE IF NOT EXISTS shopify_stores (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     name TEXT NOT NULL,
                     shop_url TEXT NOT NULL,
                     access_token TEXT NOT NULL,
                     is_active INTEGER DEFAULT 1
                 )
-            ''')
+            '''
+            c.execute(self.convert_query(query))
             
             # Orders
-            c.execute('''
+            query = '''
                 CREATE TABLE IF NOT EXISTS orders (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     order_id TEXT UNIQUE NOT NULL,
                     store_id INTEGER,
                     order_type TEXT NOT NULL CHECK(order_type IN ('cod', 'abandoned_cart')),
@@ -83,15 +124,53 @@ class Database:
                     is_whatsapp_queue INTEGER DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    edited_customer_name TEXT,
+                    edited_phone TEXT,
+                    edited_address TEXT,
+                    edited_pincode TEXT,
+                    edited_at TIMESTAMP,
+                    shopify_order_number TEXT,
+                    shopify_synced_at TIMESTAMP,
                     FOREIGN KEY (store_id) REFERENCES shopify_stores(id),
                     FOREIGN KEY (assigned_to) REFERENCES users(id)
                 )
-            ''')
+            '''
+            c.execute(self.convert_query(query))
+            
+            # Add columns if they don't exist (migration for existing databases)
+            try:
+                c.execute('ALTER TABLE orders ADD COLUMN edited_customer_name TEXT')
+            except:
+                pass
+            try:
+                c.execute('ALTER TABLE orders ADD COLUMN edited_phone TEXT')
+            except:
+                pass
+            try:
+                c.execute('ALTER TABLE orders ADD COLUMN edited_address TEXT')
+            except:
+                pass
+            try:
+                c.execute('ALTER TABLE orders ADD COLUMN edited_pincode TEXT')
+            except:
+                pass
+            try:
+                c.execute('ALTER TABLE orders ADD COLUMN edited_at TIMESTAMP')
+            except:
+                pass
+            try:
+                c.execute('ALTER TABLE orders ADD COLUMN shopify_order_number TEXT')
+            except:
+                pass
+            try:
+                c.execute('ALTER TABLE orders ADD COLUMN shopify_synced_at TIMESTAMP')
+            except:
+                pass
             
             # Call logs
-            c.execute('''
+            query = '''
                 CREATE TABLE IF NOT EXISTS call_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     order_id INTEGER NOT NULL,
                     caller_id INTEGER NOT NULL,
                     phone_dialed TEXT,
@@ -105,12 +184,13 @@ class Database:
                     FOREIGN KEY (order_id) REFERENCES orders(id),
                     FOREIGN KEY (caller_id) REFERENCES users(id)
                 )
-            ''')
+            '''
+            c.execute(self.convert_query(query))
             
             # Store assignments (daily)
-            c.execute('''
+            query = '''
                 CREATE TABLE IF NOT EXISTS store_assignments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     store_id INTEGER NOT NULL,
                     caller_id INTEGER NOT NULL,
                     assigned_date DATE NOT NULL,
@@ -119,12 +199,13 @@ class Database:
                     FOREIGN KEY (caller_id) REFERENCES users(id),
                     UNIQUE(store_id, caller_id, assigned_date)
                 )
-            ''')
+            '''
+            c.execute(self.convert_query(query))
             
             # Recordings metadata
-            c.execute('''
+            query = '''
                 CREATE TABLE IF NOT EXISTS recordings (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     call_log_id INTEGER NOT NULL,
                     file_name TEXT,
                     file_size_bytes INTEGER,
@@ -135,17 +216,16 @@ class Database:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (call_log_id) REFERENCES call_logs(id)
                 )
-            ''')
+            '''
+            c.execute(self.convert_query(query))
             
             # Create indexes for performance
-            c.execute('CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)')
-            c.execute('CREATE INDEX IF NOT EXISTS idx_orders_assigned_to ON orders(assigned_to)')
-            c.execute('CREATE INDEX IF NOT EXISTS idx_orders_order_id ON orders(order_id)')
-            c.execute('CREATE INDEX IF NOT EXISTS idx_call_logs_order_id ON call_logs(order_id)')
-            c.execute('CREATE INDEX IF NOT EXISTS idx_call_logs_caller_id ON call_logs(caller_id)')
-            c.execute('CREATE INDEX IF NOT EXISTS idx_assignments_date ON store_assignments(assigned_date)')
-            
-            print("✅ Database initialized successfully")
+            c.execute(self.convert_query('CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)'))
+            c.execute(self.convert_query('CREATE INDEX IF NOT EXISTS idx_orders_assigned_to ON orders(assigned_to)'))
+            c.execute(self.convert_query('CREATE INDEX IF NOT EXISTS idx_orders_order_id ON orders(order_id)'))
+            c.execute(self.convert_query('CREATE INDEX IF NOT EXISTS idx_call_logs_order_id ON call_logs(order_id)'))
+            c.execute(self.convert_query('CREATE INDEX IF NOT EXISTS idx_call_logs_caller_id ON call_logs(caller_id)'))
+            c.execute(self.convert_query('CREATE INDEX IF NOT EXISTS idx_assignments_date ON store_assignments(assigned_date)'))
     
     # ============= USER MANAGEMENT =============
     
@@ -280,6 +360,33 @@ class Database:
             c.execute('''
                 UPDATE orders 
                 SET attempts = attempts + 1, updated_at = ?
+                WHERE order_id = ?
+            ''', (datetime.now(), order_id))
+    
+    def update_order_edits(self, order_id, customer_name, phone, address, pincode, shopify_order_number=None):
+        """Update order with edited details"""
+        with self.get_connection() as conn:
+            c = conn.cursor()
+            c.execute('''
+                UPDATE orders 
+                SET edited_customer_name = ?, 
+                    edited_phone = ?, 
+                    edited_address = ?, 
+                    edited_pincode = ?,
+                    edited_at = ?,
+                    shopify_order_number = COALESCE(?, shopify_order_number),
+                    updated_at = ?
+                WHERE order_id = ?
+            ''', (customer_name, phone, address, pincode, datetime.now(), 
+                  shopify_order_number, datetime.now(), order_id))
+    
+    def mark_shopify_synced(self, order_id):
+        """Mark order as synced to Shopify"""
+        with self.get_connection() as conn:
+            c = conn.cursor()
+            c.execute('''
+                UPDATE orders 
+                SET shopify_synced_at = ?
                 WHERE order_id = ?
             ''', (datetime.now(), order_id))
     
