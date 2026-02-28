@@ -984,3 +984,30 @@ def delete_all_orders():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/admin/assign-all-to-caller', methods=['POST'])
+@login_required
+@admin_required
+def assign_all_to_caller():
+    """Assign ALL orders (pending or any status) to a specific caller"""
+    data = request.json
+    caller_id = data.get('caller_id', 1)
+    
+    try:
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            
+            # Count orders to assign
+            c.execute("SELECT COUNT(*) FROM orders")
+            count = c.fetchone()[0]
+            
+            # Assign all to specified caller
+            c.execute("UPDATE orders SET assigned_to = ?, status = 'assigned' WHERE 1=1", (caller_id,))
+            
+            return jsonify({
+                'success': True,
+                'assigned_count': count,
+                'caller_id': caller_id
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
