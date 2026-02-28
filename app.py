@@ -740,16 +740,21 @@ def api_update_status():
     # Increment attempts
     db.increment_attempts(order_id)
     
-    # Create call log
-    db.create_call_log(
-        order['id'],
-        caller_id,
-        order['phone'],
-        call_start,
-        call_end,
-        call_duration,
-        status
-    )
+    # Create call log (only if we have a database ID)
+    if order.get('id'):
+        try:
+            db.create_call_log(
+                order['id'],
+                caller_id,
+                order['phone'],
+                call_start,
+                call_end,
+                call_duration,
+                status
+            )
+        except Exception as e:
+            # Log the error but don't fail the request
+            print(f"Warning: Failed to create call log: {e}")
     
     # Update order status based on disposition
     if 'confirm' in status.lower():
