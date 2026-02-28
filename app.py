@@ -1011,3 +1011,36 @@ def assign_all_to_caller():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/debug/database-stats')
+@login_required
+def database_stats():
+    """Show database statistics for debugging"""
+    try:
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            
+            # Total orders
+            c.execute("SELECT COUNT(*) FROM orders")
+            total_orders = c.fetchone()[0]
+            
+            # Orders by status
+            c.execute("SELECT status, COUNT(*) FROM orders GROUP BY status")
+            status_counts = dict(c.fetchall())
+            
+            # Orders by assigned_to
+            c.execute("SELECT assigned_to, COUNT(*) FROM orders GROUP BY assigned_to")
+            assignment_counts = dict(c.fetchall())
+            
+            # Sample orders
+            c.execute("SELECT id, order_id, customer_name, status, assigned_to FROM orders LIMIT 5")
+            sample_orders = [dict(row) for row in c.fetchall()]
+            
+            return jsonify({
+                'total_orders': total_orders,
+                'by_status': status_counts,
+                'by_assignment': assignment_counts,
+                'sample_orders': sample_orders
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
