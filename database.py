@@ -322,11 +322,13 @@ class Database:
         """Get orders assigned to a specific caller"""
         with self.get_connection() as conn:
             c = conn.cursor()
-            c.execute('''
+            query = '''
                 SELECT * FROM orders 
                 WHERE assigned_to = ? AND status = ?
                 ORDER BY created_at ASC
-            ''', (caller_id, status))
+            '''
+            query, params = self.convert_query(query, (caller_id, status))
+            c.execute(query, params)
             return c.fetchall()
     
     def assign_order(self, order_id, caller_id):
@@ -344,27 +346,33 @@ class Database:
         with self.get_connection() as conn:
             c = conn.cursor()
             if final_status:
-                c.execute('''
+                query = '''
                     UPDATE orders 
                     SET status = ?, final_status = ?, updated_at = ?, completed_at = ?
                     WHERE order_id = ?
-                ''', (status, final_status, datetime.now(), datetime.now(), order_id))
+                '''
+                query, params = self.convert_query(query, (status, final_status, datetime.now(), datetime.now(), order_id))
+                c.execute(query, params)
             else:
-                c.execute('''
+                query = '''
                     UPDATE orders 
                     SET status = ?, updated_at = ?
                     WHERE order_id = ?
-                ''', (status, datetime.now(), order_id))
+                '''
+                query, params = self.convert_query(query, (status, datetime.now(), order_id))
+                c.execute(query, params)
     
     def increment_attempts(self, order_id):
         """Increment call attempts for an order"""
         with self.get_connection() as conn:
             c = conn.cursor()
-            c.execute('''
+            query = '''
                 UPDATE orders 
                 SET attempts = attempts + 1, updated_at = ?
                 WHERE order_id = ?
-            ''', (datetime.now(), order_id))
+            '''
+            query, params = self.convert_query(query, (datetime.now(), order_id))
+            c.execute(query, params)
     
     def update_order_edits(self, order_id, customer_name, phone, address, pincode, shopify_order_number=None):
         """Update order with edited details"""
