@@ -53,10 +53,10 @@ class Database:
         finally:
             conn.close()
     
-    def convert_query(self, query):
+    def convert_query(self, query, params=None):
         """Convert SQLite syntax to PostgreSQL when needed"""
         if not self.is_postgres:
-            return query
+            return (query, params) if params is not None else query
         
         # Replace ? placeholders with %s for PostgreSQL
         query = query.replace('?', '%s')
@@ -66,7 +66,7 @@ class Database:
         query = query.replace("AUTOINCREMENT", "")  # PostgreSQL uses SERIAL
         query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
         
-        return query
+        return (query, params) if params is not None else query
     
     def init_database(self):
         """Initialize database schema"""
