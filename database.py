@@ -293,19 +293,22 @@ class Database:
         """Create a new order"""
         with self.get_connection() as conn:
             c = conn.cursor()
-            c.execute('''
+            query = '''
                 INSERT INTO orders (order_id, store_id, order_type, customer_name, phone,
                                   address, pincode, product_name, price, qty, order_date)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (order_id, store_id, order_type, customer_name, phone, address, 
+            '''
+            query, params = self.convert_query(query, (order_id, store_id, order_type, customer_name, phone, address, 
                   pincode, product_name, price, qty, order_date))
+            c.execute(query, params)
             return c.lastrowid
     
     def get_order_by_id(self, order_id):
         """Get order by order_id string"""
         with self.get_connection() as conn:
             c = conn.cursor()
-            c.execute('SELECT * FROM orders WHERE order_id = ?', (order_id,))
+            query, params = self.convert_query('SELECT * FROM orders WHERE order_id = ?', (order_id,))
+            c.execute(query, params)
             return c.fetchone()
     
     def get_orders_by_status(self, status):
