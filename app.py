@@ -786,6 +786,24 @@ def api_edit_order():
             'message': 'Missing required fields'
         }), 400
     
+    # Additional validation for data quality
+    if len(customer_name) > 200:
+        customer_name = customer_name[:200]  # Truncate to reasonable length
+    
+    if len(address) > 500:
+        address = address[:500]  # Truncate long addresses
+    
+    if len(pincode) > 10:
+        pincode = pincode[:10]  # Truncate pincode
+    
+    # Basic phone validation (10-15 digits)
+    phone_digits = ''.join(filter(str.isdigit, phone))
+    if len(phone_digits) < 10 or len(phone_digits) > 15:
+        return jsonify({
+            'success': False,
+            'message': 'Invalid phone number (must be 10-15 digits)'
+        }), 400
+    
     # Get order
     order = db.get_order_by_id(order_id)
     if not order:
